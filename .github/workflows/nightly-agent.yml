@@ -2,7 +2,7 @@ name: Nightly Code Agent
 
 on:
   schedule:
-    - cron: "0 7 * * *"  # 04:00 BRT (UTC-3)
+    - cron: "0 4 * * *"  # 01:00 BRT (UTC-3)
   workflow_dispatch:
 
 jobs:
