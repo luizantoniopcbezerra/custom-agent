@@ -1,0 +1,51 @@
+# NightlyCodeAgent configuration example
+# Copy this file to config.yml and fill in your values.
+# Secrets (OPENROUTER_API_KEY, GH_TOKEN*) must be set as environment variables
+# or in a .env file — never commit them here.
+
+openrouter:
+  # Always uses nvidia/nemotron-3-ultra-550b-a55b:free
+  # Conservative limits below the free tier caps (20 RPM / 50 RPD)
+  max_requests_per_minute: 18
+  max_requests_per_day: 45
+
+agent:
+  # Maximum LLM tool-call iterations per issue (circuit breaker)
+  max_tool_calls_per_issue: 30
+  # Maximum bytes to read per file during context building
+  max_file_size_bytes: 50000
+  # Maximum number of files to include in the initial context
+  max_context_files: 10
+  # Issues with score > this threshold are skipped (1=trivial, 10=very hard)
+  difficulty_threshold: 5
+  # Conventional issue filter: only process issues titled "type: description".
+  # Empty list = no filter (accept all issues).
+  conventional_types:
+    - fix
+    - docs
+    - chore
+    - refactor
+  # Maximum successful PRs opened per run (across all repos and all accounts)
+  max_resolutions_per_run: 3
+
+# Multi-account support: the agent iterates accounts in order until the PR limit
+# is reached. Each token_env names the environment variable holding the token.
+# Token scopes needed: repo, read:org, notifications
+#
+# accounts:
+#   - token_env: GH_TOKEN_PERSONAL   # personal GitHub account
+#   - token_env: GH_TOKEN_ORG        # second account (org member, non-owner)
+#
+# Single-account mode: omit 'accounts' and set GH_TOKEN in .env instead.
+
+# repos: omit this section to auto-discover all repos where you have open
+# assigned issues (uses notifications scope).
+#
+# repos:
+#   - owner: "your-github-username"
+#     name: "your-repo-name"
+#     branch: "main"
+#     labels: []
+#     exclude_labels:
+#       - "wontfix"
+#       - "blocked"

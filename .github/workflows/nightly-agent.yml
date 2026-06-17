@@ -1,0 +1,45 @@
+name: Nightly Code Agent
+
+on:
+  schedule:
+    - cron: "0 7 * * *"  # 04:00 BRT (UTC-3)
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run NightlyCodeAgent
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Single-account mode: set GH_TOKEN here
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          # Multi-account mode: add each account token using the same names
+          # you put in config.yml under accounts[*].token_env
+          # GH_TOKEN_PERSONAL: ${{ secrets.GH_TOKEN_PERSONAL }}
+          # GH_TOKEN_ORG: ${{ secrets.GH_TOKEN_ORG }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python -m agent.main
