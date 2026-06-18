@@ -22,6 +22,7 @@ agent:
   # Empty list = no filter (accept all issues).
   conventional_types:
     - fix
+    - feat
     - docs
     - chore
     - refactor
