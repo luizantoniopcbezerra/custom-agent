@@ -112,7 +112,7 @@ def _attempt_issue(
 ) -> AgentRun:
     """Clone, run sprint pipeline, commit and push for a single issue."""
     sprint_slug = f"{issue.number}-{_slugify(issue.title)}"
-    tmp_dir = tempfile.mkdtemp(prefix="nca-")
+    tmp_dir = tempfile.mkdtemp(prefix="nightcrawler-")
     repo: Repo | None = None
 
     try:
@@ -182,7 +182,7 @@ def _attempt_issue(
 
         if deps.email_client is not None:
             deps.email_client.send(
-                subject=f"[CUSTOM-AGENT] PR Aberto - {issue.title}",
+                subject=f"[NIGHTCRAWLER] PR Aberto - {issue.title}",
                 body=(
                     f"Repositório: {repo_config.full_name}\n"
                     f"Issue: #{issue.number} - {issue.title}\n"

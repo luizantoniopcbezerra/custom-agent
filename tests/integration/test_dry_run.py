@@ -1,4 +1,4 @@
-"""Integration tests for NightlyCodeAgent.
+"""Integration tests for Nightcrawler Agent.
 
 These tests run against real GitHub and OpenRouter APIs.
 They are skipped by default and require:

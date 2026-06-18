@@ -151,7 +151,7 @@ def main() -> None:
     if email_client is not None:
         if success == 0 and error == 0 and noop == 0 and pending == 0:
             email_client.send(
-                subject="[CUSTOM-AGENT] Relatório de Execução",
+                subject="[NIGHTCRAWLER] Relatório de Execução",
                 body=(
                     "Olá!\n\n"
                     "O agente rodou esta noite mas não havia issues assignadas para mim "
@@ -221,7 +221,7 @@ def _send_summary(email_client: EmailClient, results: list[AgentRun]) -> None:
         lines.append("")
 
     email_client.send(
-        subject="[CUSTOM-AGENT] Relatório de Execução",
+        subject="[NIGHTCRAWLER] Relatório de Execução",
         body="\n".join(lines),
     )
 

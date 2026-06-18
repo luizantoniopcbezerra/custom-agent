@@ -1,4 +1,4 @@
-# NightlyCodeAgent
+# Nightcrawler Agent
 
 Um agente autônomo que roda toda madrugada via GitHub Actions. A cada execução, ele lê as issues abertas dos repositórios configurados, seleciona a mais simples por dificuldade, executa um pipeline completo de sprint (estudo → contexto → plano → implementação → review → sumário) e abre um PR para revisão humana.
 
@@ -95,7 +95,7 @@ Para multi-account, adicione um secret por conta (ex: `GH_TOKEN_PERSONAL`, `GH_T
 
 ### Executar manualmente
 
-1. Acesse **Actions → Nightly Code Agent**
+1. Acesse **Actions → Nightcrawler Agent**
 2. Clique em **Run workflow**
 
 O cron executa automaticamente todo dia às **01:00 UTC** (22:00 BRT).

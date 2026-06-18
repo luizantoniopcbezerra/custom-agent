@@ -25,7 +25,7 @@ Study, context, plan and self-review are available at:
 Closes #{issue_number}
 
 ---
-*This PR was opened automatically by [NightlyCodeAgent](https://github.com).*
+*This PR was opened automatically by [Nightcrawler Agent](https://github.com).*
 """
 
 _MAX_ISSUES = 20

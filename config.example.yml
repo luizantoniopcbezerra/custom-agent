@@ -1,4 +1,4 @@
-# NightlyCodeAgent configuration example
+# Nightcrawler Agent configuration example
 # Copy this file to config.yml and fill in your values.
 # Secrets (OPENROUTER_API_KEY, GH_TOKEN*) must be set as environment variables
 # or in a .env file — never commit them here.

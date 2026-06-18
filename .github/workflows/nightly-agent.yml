@@ -1,4 +1,4 @@
-name: Nightly Code Agent
+name: Nightcrawler Agent
 
 on:
   schedule:
@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run NightlyCodeAgent
+      - name: Run Nightcrawler Agent
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # Single-account mode: set GH_TOKEN here
