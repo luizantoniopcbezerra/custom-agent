@@ -201,6 +201,19 @@ def _write_docs(docs: dict[str, str], repo_root: str, sprint_slug: str) -> None:
     console.print(f"[Sprint] Docs written to docs/Sprints/{sprint_slug}/")
 
 
+def _load_existing_sprint_docs(repo_root: str, sprint_slug: str) -> tuple[str, str] | None:
+    """Return (context, plan) if both already exist in docs/Sprints/{sprint_slug}/, else None."""
+    sprint_dir = Path(repo_root) / "docs" / "Sprints" / sprint_slug
+    context_file = sprint_dir / "CONTEXT.md"
+    plan_file = sprint_dir / "PLAN.md"
+    if context_file.exists() and plan_file.exists():
+        return (
+            context_file.read_text(encoding="utf-8"),
+            plan_file.read_text(encoding="utf-8"),
+        )
+    return None
+
+
 def run_sprint(
     issue: IssueCandidate,
     file_tree: str,
@@ -214,12 +227,16 @@ def run_sprint(
 ) -> tuple[list[str], str]:
     """Run full sprint pipeline (study → context → plan → execute → review → junior summary).
 
+    If CONTEXT.md and PLAN.md already exist in docs/Sprints/{sprint_slug}/, they are reused and
+    the context/plan LLM phases are skipped — only study + execute are run.
+
     Writes sprint docs to docs/Sprints/{sprint_slug}/ in the repo.
     Returns (written_files, junior_summary).
     """
-    # Build shared conversation for study → context → plan
-    messages: list[MessageParam] = [{"role": "system", "content": _PHASE_SYSTEM}]
+    existing = _load_existing_sprint_docs(repo_root, sprint_slug)
 
+    # Always run a fresh study so the agent understands the current state of the codebase.
+    messages: list[MessageParam] = [{"role": "system", "content": _PHASE_SYSTEM}]
     study = _chat_phase(
         messages,
         _STUDY_PROMPT.format(
@@ -234,8 +251,14 @@ def run_sprint(
         "STUDY",
     )
 
-    context = _chat_phase(messages, _CONTEXT_PROMPT, llm_client, model, "CONTEXT")
-    plan = _chat_phase(messages, _PLAN_PROMPT, llm_client, model, "PLAN")
+    if existing:
+        context, plan = existing
+        console.print(
+            f"[Sprint] Existing CONTEXT.md + PLAN.md found for '{sprint_slug}' — skipping context/plan phases."
+        )
+    else:
+        context = _chat_phase(messages, _CONTEXT_PROMPT, llm_client, model, "CONTEXT")
+        plan = _chat_phase(messages, _PLAN_PROMPT, llm_client, model, "PLAN")
 
     sprint_context = (
         f"## Sprint Study\n{study}\n\n"
