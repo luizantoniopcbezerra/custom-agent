@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import cast
 
 from openai import BadRequestError
@@ -16,7 +17,8 @@ console = Console()
 
 SYSTEM_PROMPT = """\
 You are an autonomous software engineer. You operate without human supervision.
-Your only output is code changes committed as a PR — there is no one to review your reasoning mid-task.
+Your only output is file changes committed as a PR — there is no one to review your reasoning mid-task.
+This includes source code, configuration, tests, and documentation files depending on the issue type.
 
 ## Principles (non-negotiable)
 
@@ -30,7 +32,8 @@ Your only output is code changes committed as a PR — there is no one to review
 
 - When in doubt between two approaches, pick the simpler one.
 - Do not refactor code that is not directly related to the issue. Touch only what the issue requires.
-- Do not add comments, logging, or documentation unless the issue explicitly asks for it.
+- Do not add inline code comments or logging unless the issue explicitly asks for it.
+- For `docs:` issues, writing documentation or markdown files IS the required output.
 - Do not introduce new dependencies. Solve with what already exists in the codebase.
 - If the issue is ambiguous, implement the most conservative interpretation that still resolves it.
 - Never break existing behavior. Read tests and existing code before writing anything.
@@ -74,6 +77,34 @@ def _build_initial_user_message(
     for rel_path, content in relevant_files:
         parts.append(f"## {rel_path}\n\n```\n{content}\n```\n")
     return "\n".join(parts)
+
+
+def _to_message_param(msg: object) -> MessageParam:
+    """Convert assistant message to MessageParam, replacing malformed tool call args with '{}'.
+
+    Some models (e.g. Nvidia free tier) occasionally emit invalid JSON in tool call arguments.
+    Passing that raw message back to the provider on the next turn causes a 400. This function
+    sanitises the arguments so the history stays valid while still returning an error to the model.
+    """
+    tool_calls = getattr(msg, "tool_calls", None)
+    if not tool_calls:
+        return cast(MessageParam, msg)
+
+    sanitized: list[dict[str, object]] = []
+    for tc in tool_calls:
+        args = tc.function.arguments
+        try:
+            json.loads(args)
+        except (json.JSONDecodeError, ValueError):
+            args = "{}"
+        sanitized.append(
+            {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": args}}
+        )
+
+    return cast(
+        MessageParam,
+        {"role": "assistant", "content": getattr(msg, "content", None), "tool_calls": sanitized},
+    )
 
 
 def _process_tool_calls(
@@ -124,7 +155,7 @@ def run(
             break
 
         msg = response.choices[0].message
-        messages.append(cast(MessageParam, msg))
+        messages.append(_to_message_param(msg))
 
         if not msg.tool_calls:
             console.print(
