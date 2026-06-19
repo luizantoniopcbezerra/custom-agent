@@ -92,7 +92,12 @@ def dispatch_tool(
     name: str = tool_call.function.name  # type: ignore[attr-defined]
     try:
         args: dict[str, object] = json.loads(tool_call.function.arguments)  # type: ignore[attr-defined]
-    except (json.JSONDecodeError, AttributeError):
+    except json.JSONDecodeError:
+        try:
+            args = json.loads(tool_call.function.arguments, strict=False)  # type: ignore[attr-defined]
+        except (json.JSONDecodeError, AttributeError):
+            return "ERROR: could not parse tool arguments."
+    except AttributeError:
         return "ERROR: could not parse tool arguments."
 
     if name == "read_file":

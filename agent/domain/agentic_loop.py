@@ -95,7 +95,12 @@ def _to_message_param(msg: object) -> MessageParam:
         args = tc.function.arguments
         try:
             json.loads(args)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError:
+            try:
+                json.loads(args, strict=False)
+            except (json.JSONDecodeError, ValueError):
+                args = "{}"
+        except ValueError:
             args = "{}"
         sanitized.append(
             {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": args}}
