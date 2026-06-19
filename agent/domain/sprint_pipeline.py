@@ -167,6 +167,9 @@ def _chat_phase(
     messages.append({"role": "user", "content": user_prompt})
     console.print(f"[Sprint] Running {label}...")
     response = llm_client.chat(messages, model=model)
+    if not response.choices:
+        console.print(f"[Sprint] Empty/null choices from provider during {label} — returning empty.")
+        return ""
     content = response.choices[0].message.content or ""
     messages.append(cast(MessageParam, response.choices[0].message))
     return content

@@ -147,11 +147,18 @@ def run(
         {"role": "user", "content": initial_user},
     ]
 
+    _MAX_CONSECUTIVE_PARSE_ERRORS = 3
+    consecutive_parse_errors = 0
+
     for i in range(max_calls):
         try:
             response = llm_client.chat(messages, TOOL_SCHEMAS, model=model)
         except BadRequestError as exc:
             console.print(f"[AgenticLoop] 400 from provider — stopping loop. ({exc})")
+            break
+
+        if not response.choices:
+            console.print("[AgenticLoop] Empty/null choices from provider — stopping loop.")
             break
 
         msg = response.choices[0].message
@@ -164,6 +171,19 @@ def run(
             break
 
         tool_results = _process_tool_calls(msg.tool_calls, repo_root, written_files, max_file_bytes)
+        parse_errors_this_turn = sum(
+            1 for r in tool_results if r["content"] == "ERROR: could not parse tool arguments."
+        )
+        if parse_errors_this_turn:
+            consecutive_parse_errors += parse_errors_this_turn
+            if consecutive_parse_errors >= _MAX_CONSECUTIVE_PARSE_ERRORS:
+                console.print(
+                    f"[AgenticLoop] {consecutive_parse_errors} consecutive tool-argument parse errors"
+                    " — model cannot produce valid JSON, stopping loop."
+                )
+                break
+        else:
+            consecutive_parse_errors = 0
         messages.extend(cast(list[MessageParam], tool_results))
 
     return written_files
