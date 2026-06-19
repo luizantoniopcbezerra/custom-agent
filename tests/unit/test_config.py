@@ -23,8 +23,6 @@ def test_from_yaml_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         openrouter:
           model: "qwen/qwen3-coder:free"
           max_requests_per_minute: 15
-        agent:
-          difficulty_threshold: 4
         repos:
           - owner: alice
             name: my-repo
@@ -35,7 +33,6 @@ def test_from_yaml_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert config.openrouter.model == "qwen/qwen3-coder:free"
     assert config.openrouter.max_requests_per_minute == 15
-    assert config.agent.difficulty_threshold == 4
     assert len(config.repos) == 1
     assert config.repos[0].full_name == "alice/my-repo"
 
@@ -99,4 +96,3 @@ def test_openrouter_config_defaults() -> None:
 def test_agent_settings_defaults() -> None:
     s = AgentSettings()
     assert s.max_tool_calls_per_issue == 30
-    assert s.difficulty_threshold == 5

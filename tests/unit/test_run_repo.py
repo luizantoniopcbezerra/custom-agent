@@ -17,7 +17,7 @@ def _make_issue(number: int = 1, score: int = 2) -> IssueCandidate:
         title="Fix login bug",
         body="Users cannot log in.",
         score=score,
-        reason="trivial",
+        reason="heuristic",
         repo_full_name="alice/repo",
         created_at="2026-01-01T00:00:00",
     )
@@ -69,42 +69,28 @@ def test_slugify_truncates_at_50() -> None:
 
 
 # ---------------------------------------------------------------------------
-# run_for_repo — noop paths
+# run_for_repo — noop: no open issues
+# ---------------------------------------------------------------------------
+
+
+def test_noop_when_no_open_issues() -> None:
+    deps = _make_deps()
+    deps.github_client.get_open_issues.return_value = []
+
+    results = run_for_repo(_make_repo_config(), deps)
+
+    assert len(results) == 1
+    assert results[0].status == "noop"
+    assert results[0].issue is None
+
+
+# ---------------------------------------------------------------------------
+# run_for_repo — noop: no linked branch
 # ---------------------------------------------------------------------------
 
 
 @patch("agent.application.run_repo.score_issues")
-@patch("agent.application.run_repo.select_best")
-def test_noop_when_no_issue_passes_threshold(
-    mock_select_best: MagicMock,
-    mock_score_issues: MagicMock,
-) -> None:
-    deps = _make_deps()
-    deps.github_client.get_open_issues.return_value = [
-        {
-            "number": 1,
-            "title": "Bug",
-            "body": "x",
-            "repo_full_name": "alice/repo",
-            "created_at": "2026",
-        }
-    ]
-    mock_score_issues.return_value = []
-    mock_select_best.return_value = None
-
-    result = run_for_repo(_make_repo_config(), deps)
-
-    assert result.status == "noop"
-    assert result.issue is None
-    deps.github_client.get_repo.assert_not_called()
-
-
-@patch("agent.application.run_repo.score_issues")
-@patch("agent.application.run_repo.select_best")
-def test_noop_when_pr_already_exists(
-    mock_select_best: MagicMock,
-    mock_score_issues: MagicMock,
-) -> None:
+def test_noop_when_no_linked_branch(mock_score_issues: MagicMock) -> None:
     deps = _make_deps()
     issue = _make_issue()
     deps.github_client.get_open_issues.return_value = [
@@ -117,13 +103,39 @@ def test_noop_when_pr_already_exists(
         }
     ]
     mock_score_issues.return_value = [issue]
-    mock_select_best.return_value = issue
-    deps.github_client.has_open_pr_for_issue.return_value = True
+    deps.github_client.get_linked_branch.return_value = None
 
-    result = run_for_repo(_make_repo_config(), deps)
+    results = run_for_repo(_make_repo_config(), deps)
 
-    assert result.status == "noop"
-    assert result.issue is None
+    assert len(results) == 1
+    assert results[0].status == "noop"
+
+
+# ---------------------------------------------------------------------------
+# run_for_repo — pending PR already exists
+# ---------------------------------------------------------------------------
+
+
+@patch("agent.application.run_repo.score_issues")
+def test_pending_pr_when_pr_already_exists(mock_score_issues: MagicMock) -> None:
+    deps = _make_deps()
+    issue = _make_issue()
+    deps.github_client.get_open_issues.return_value = [
+        {
+            "number": 1,
+            "title": "Fix login bug",
+            "body": "x",
+            "repo_full_name": "alice/repo",
+            "created_at": "2026",
+        }
+    ]
+    mock_score_issues.return_value = [issue]
+    deps.github_client.get_linked_branch.return_value = "fix/1-fix-login-bug"
+    deps.github_client.get_open_pr_url.return_value = "https://github.com/alice/repo/pull/42"
+
+    results = run_for_repo(_make_repo_config(), deps)
+
+    assert any(r.status == "pending_pr" for r in results)
 
 
 # ---------------------------------------------------------------------------
@@ -133,19 +145,17 @@ def test_noop_when_pr_already_exists(
 
 @patch("agent.application.run_repo.git_ops.cleanup")
 @patch("agent.application.run_repo.git_ops.clone")
-@patch("agent.application.run_repo.agentic_loop.run")
+@patch("agent.application.run_repo.run_sprint")
 @patch("agent.application.run_repo.build_file_tree", return_value="app.py")
 @patch("agent.application.run_repo.extract_keywords", return_value=["login"])
 @patch("agent.application.run_repo.select_relevant_files", return_value=[])
 @patch("agent.application.run_repo.score_issues")
-@patch("agent.application.run_repo.select_best")
 def test_success_dry_run_skips_commit(
-    mock_select_best: MagicMock,
     mock_score_issues: MagicMock,
     mock_select_rel: MagicMock,
     mock_keywords: MagicMock,
     mock_tree: MagicMock,
-    mock_loop: MagicMock,
+    mock_sprint: MagicMock,
     mock_clone: MagicMock,
     mock_cleanup: MagicMock,
 ) -> None:
@@ -161,40 +171,38 @@ def test_success_dry_run_skips_commit(
         }
     ]
     mock_score_issues.return_value = [issue]
-    mock_select_best.return_value = issue
-    deps.github_client.has_open_pr_for_issue.return_value = False
+    deps.github_client.get_linked_branch.return_value = "fix/1-fix-login-bug"
+    deps.github_client.get_open_pr_url.return_value = None
     mock_clone.return_value = MagicMock()
-    mock_loop.return_value = ["app.py"]
+    mock_sprint.return_value = (["app.py"], "summary")
 
-    result = run_for_repo(_make_repo_config(), deps)
+    results = run_for_repo(_make_repo_config(), deps)
 
-    assert result.status == "success"
-    assert result.pr_url is None
-    assert result.written_files == ["app.py"]
+    success = next(r for r in results if r.status == "success")
+    assert success.pr_url is None
+    assert success.written_files == ["app.py"]
     deps.github_client.open_pr.assert_not_called()
     mock_cleanup.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
-# run_for_repo — noop when loop writes nothing
+# run_for_repo — noop when sprint writes nothing
 # ---------------------------------------------------------------------------
 
 
 @patch("agent.application.run_repo.git_ops.cleanup")
 @patch("agent.application.run_repo.git_ops.clone")
-@patch("agent.application.run_repo.agentic_loop.run")
+@patch("agent.application.run_repo.run_sprint")
 @patch("agent.application.run_repo.build_file_tree", return_value="")
 @patch("agent.application.run_repo.extract_keywords", return_value=[])
 @patch("agent.application.run_repo.select_relevant_files", return_value=[])
 @patch("agent.application.run_repo.score_issues")
-@patch("agent.application.run_repo.select_best")
 def test_noop_when_no_files_written(
-    mock_select_best: MagicMock,
     mock_score_issues: MagicMock,
     mock_select_rel: MagicMock,
     mock_keywords: MagicMock,
     mock_tree: MagicMock,
-    mock_loop: MagicMock,
+    mock_sprint: MagicMock,
     mock_clone: MagicMock,
     mock_cleanup: MagicMock,
 ) -> None:
@@ -210,15 +218,15 @@ def test_noop_when_no_files_written(
         }
     ]
     mock_score_issues.return_value = [issue]
-    mock_select_best.return_value = issue
-    deps.github_client.has_open_pr_for_issue.return_value = False
+    deps.github_client.get_linked_branch.return_value = "fix/1-fix-login-bug"
+    deps.github_client.get_open_pr_url.return_value = None
     mock_clone.return_value = MagicMock()
-    mock_loop.return_value = []  # loop wrote nothing
+    mock_sprint.return_value = ([], "")
 
-    result = run_for_repo(_make_repo_config(), deps)
+    results = run_for_repo(_make_repo_config(), deps)
 
-    assert result.status == "noop"
-    assert result.written_files == []
+    noop = next(r for r in results if r.status == "noop")
+    assert noop.written_files == []
     mock_cleanup.assert_called_once()
 
 
@@ -230,9 +238,7 @@ def test_noop_when_no_files_written(
 @patch("agent.application.run_repo.git_ops.cleanup")
 @patch("agent.application.run_repo.git_ops.clone")
 @patch("agent.application.run_repo.score_issues")
-@patch("agent.application.run_repo.select_best")
 def test_cleanup_called_on_error(
-    mock_select_best: MagicMock,
     mock_score_issues: MagicMock,
     mock_clone: MagicMock,
     mock_cleanup: MagicMock,
@@ -249,33 +255,30 @@ def test_cleanup_called_on_error(
         }
     ]
     mock_score_issues.return_value = [issue]
-    mock_select_best.return_value = issue
-    deps.github_client.has_open_pr_for_issue.return_value = False
+    deps.github_client.get_linked_branch.return_value = "fix/1-fix-login-bug"
+    deps.github_client.get_open_pr_url.return_value = None
     mock_clone.side_effect = RuntimeError("network failure")
 
-    result = run_for_repo(_make_repo_config(), deps)
+    results = run_for_repo(_make_repo_config(), deps)
 
-    assert result.status == "error"
-    assert "network failure" in (result.error_message or "")
-    # clone failed → repo is None → shutil.rmtree was called instead of cleanup
-    mock_cleanup.assert_not_called()
+    error = next(r for r in results if r.status == "error")
+    assert "network failure" in (error.error_message or "")
+    mock_cleanup.assert_not_called()  # clone failed → repo is None → shutil.rmtree used instead
 
 
 @patch("agent.application.run_repo.git_ops.cleanup")
 @patch("agent.application.run_repo.git_ops.clone")
-@patch("agent.application.run_repo.agentic_loop.run")
+@patch("agent.application.run_repo.run_sprint")
 @patch("agent.application.run_repo.build_file_tree", return_value="")
 @patch("agent.application.run_repo.extract_keywords", return_value=[])
 @patch("agent.application.run_repo.select_relevant_files", return_value=[])
 @patch("agent.application.run_repo.score_issues")
-@patch("agent.application.run_repo.select_best")
-def test_cleanup_called_on_pipeline_error(
-    mock_select_best: MagicMock,
+def test_cleanup_called_on_sprint_error(
     mock_score_issues: MagicMock,
     mock_select_rel: MagicMock,
     mock_keywords: MagicMock,
     mock_tree: MagicMock,
-    mock_loop: MagicMock,
+    mock_sprint: MagicMock,
     mock_clone: MagicMock,
     mock_cleanup: MagicMock,
 ) -> None:
@@ -291,12 +294,13 @@ def test_cleanup_called_on_pipeline_error(
         }
     ]
     mock_score_issues.return_value = [issue]
-    mock_select_best.return_value = issue
-    deps.github_client.has_open_pr_for_issue.return_value = False
+    deps.github_client.get_linked_branch.return_value = "fix/1-fix-login-bug"
+    deps.github_client.get_open_pr_url.return_value = None
     mock_clone.return_value = MagicMock()
-    mock_loop.side_effect = RuntimeError("LLM exploded")
+    mock_sprint.side_effect = RuntimeError("LLM exploded")
 
-    result = run_for_repo(_make_repo_config(), deps)
+    results = run_for_repo(_make_repo_config(), deps)
 
-    assert result.status == "error"
+    error = next(r for r in results if r.status == "error")
+    assert error.status == "error"
     mock_cleanup.assert_called_once()

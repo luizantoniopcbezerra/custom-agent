@@ -58,9 +58,8 @@ def _get_candidates(
             )
             return [], []
 
-    scored = score_issues(issues, deps.llm_client, threshold=deps.config.agent.difficulty_threshold)
+    scored = score_issues(issues)
     if not scored:
-        console.print(f"[{repo_config.full_name}] No issue passed the difficulty threshold.")
         return [], []
 
     # Sort ascending by score so we try easiest first

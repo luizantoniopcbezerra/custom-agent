@@ -20,7 +20,6 @@ class AgentSettings(BaseModel):
     max_tool_calls_per_issue: int = Field(default=30, ge=1)
     max_file_size_bytes: int = Field(default=50_000, ge=1)
     max_context_files: int = Field(default=10, ge=1)
-    difficulty_threshold: int = Field(default=5, ge=1, le=10)
     conventional_types: list[str] = Field(default_factory=list)
     max_resolutions_per_run: int = Field(default=3, ge=1)
 

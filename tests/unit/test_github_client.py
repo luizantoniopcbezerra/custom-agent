@@ -94,26 +94,28 @@ def test_get_open_issues_filters_excluded_labels() -> None:
     assert result[0]["number"] == 1
 
 
-def test_has_open_pr_for_issue_true_by_branch() -> None:
-    client, mock_gh = _make_client_with_mocks()
-
-    mock_repo = MagicMock()
-    branch = MagicMock()
-    branch.name = "agent/issue-42-fix-login"
-    mock_repo.get_branches.return_value = [branch]
-
-    assert client.has_open_pr_for_issue(mock_repo, 42) is True
-
-
-def test_has_open_pr_for_issue_false_when_no_match() -> None:
+def test_get_open_pr_url_returns_url_when_pr_exists() -> None:
     client, mock_gh = _make_client_with_mocks()
 
     mock_repo = MagicMock()
     mock_repo.full_name = "alice/repo"
-    mock_repo.get_branches.return_value = []
-    mock_gh.search_issues.return_value.totalCount = 0
+    pr = MagicMock()
+    pr.html_url = "https://github.com/alice/repo/pull/42"
+    mock_gh.search_issues.return_value = iter([pr])
 
-    assert client.has_open_pr_for_issue(mock_repo, 99) is False
+    result = client.get_open_pr_url(mock_repo, 42)
+
+    assert result == "https://github.com/alice/repo/pull/42"
+
+
+def test_get_open_pr_url_returns_none_when_no_pr() -> None:
+    client, mock_gh = _make_client_with_mocks()
+
+    mock_repo = MagicMock()
+    mock_repo.full_name = "alice/repo"
+    mock_gh.search_issues.return_value = iter([])
+
+    assert client.get_open_pr_url(mock_repo, 99) is None
 
 
 def test_open_pr_calls_create_pull_with_correct_params() -> None:
